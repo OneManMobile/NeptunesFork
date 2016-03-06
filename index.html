@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<!-- This is based on DillingerLee's great template here:
+https://github.com/Team-Code/KA_Offline -->
+<html> 
+ <head>
+    <title>Neptuns Gaffel</title> 
+</head>
+ <body>
+ <h1 align="center">Neptuns Gaffel</h1>
+	
+    <p align="center"> 
+	
+	<!--This draws the Canvas on the webpage -->
+      <canvas id="mycanvas"></canvas> 
+    </p>
+ </body>
+ 
+ <!-- Run all the JavaScript stuff -->
+ <!-- Include the processing.js library -->
+ <!-- See https://khanacademy.zendesk.com/hc/en-us/articles/202260404-What-parts-of-ProcessingJS-does-Khan-Academy-support- for differences -->
+ <script src="https://cdn.jsdelivr.net/processing.js/1.4.8/processing.min.js"></script> 
+ 
+ <script>
+    var sketchProc = function(processingInstance) {
+     with (processingInstance) {
+	 
+		//******SETUP****** - canvas størrelse og framerate/hastighed på draw funktionen
+	 
+        size(1000, 600); 
+        frameRate(120);
+		
+		//funktionskald der bestemmer hvor billedet bliver tegnet fra (centrum af billedet her, men der kan også bruges CORNER (hjørne))
+		imageMode(CENTER);
+		
+		//billeder loades fra lokale filer til variable ved at skrive stien til dem to gange som nedenunder
+		
+		/* @pjs preload="gaffel.png"; */
+		var forkImage = loadImage("gaffel.png");
+        
+		/* @pjs preload="neptun.png"; */
+		var neptuneImage = loadImage("neptun.png");
+       
+	    /* @pjs preload="goppel_1.png"; */
+		var gobbelImage1 = loadImage("goppel_1.png");
+        /* @pjs preload="goppel_2.png"; */
+    var gobbelImage2 = loadImage("goppel_2.png");
+
+    var gobbelImages = [gobbelImage1, gobbelImage2];
+
+       /* @pjs preload="diver1.png"; */
+    var diverImage1 = loadImage("diver1.png");
+     /* @pjs preload="diver2.png"; */
+    var diverImage2 = loadImage("diver2.png");
+
+    var diverImages = [diverImage1, diverImage2];
+     
+        
+//******SPIL VARIABLE******
+		
+//liste der kommer til at holde vores gaffels vej 
+var forkPath = [];
+
+//fjender
+var enemies = [];
+
+//tid der går til en ny fjende bliver skabt (i milliskunder)
+var enemySpawnTime = 1000;
+var lastEnemyTimestamp = 0;
+
+//musen-trykket-ned variabel, vi bliver nødt til at holde styr på denne selv, på en hjemmeside, i forhold til KhanAcademy 
+var mouseIsPressed = false;
+
+//Den fart et skud har, større tal gør den hurtigere
+var forkSpeed = 12;
+var forkTimestamp = millis();
+
+
+//Vores hovedpersons hastighed
+var enemySpeed = .25;
+
+//fjende animationer
+var enemyAnimSpeed = 400;
+var enemyAnimTiemstamp = millis();
+var enemyAnimIndex = 0;
+
+//Objektet med vores hovedperson
+//Den har en position (x,y) og det man kalder en "retning" (dirX, dirY)
+//dirX og dirY fortæller hvor mange x og y pixels vi hver draw-runde skal bevæge os
+//f.eks. dirX = 5, betyder vi går 5 pixels til højre ved hver draw runde 
+var mainCharacter = {
+  
+  x : width / 2,
+  y :100,
+ 
+  };
+
+ 
+  // størrelsen i pixels på vores figurer i spillet
+  var mainCharacterPixelSize = 180;
+  var forkPixelSize = 100;
+  var enemySize = 50;
+var diverSize = 100;
+
+//our fork initial state
+   var fork = {
+    x : (width / 2) - 50,
+    y : 80 
+   };
+  
+
+  var score = 0;
+  
+  //******** SPIL KODE ********
+
+
+//Vi laver en Enemy funktion, der returnere et objekt.
+//Her er objektet en fjende som vi skaber, der skal løbe fra sin start position, mod hovedpersonen.
+//Vi bruger en random funktion til at bestemme x og y positionen, så den altid ved starte et sted på en kant (top, bund, højre eller venstre)
+//(Vi giver også fjenden noget random liv, der afgør hvor mange skud den kan holde til).
+var Enemy = function(){
+    
+ //det tomme fjende objekt	
+ var enemy = {};
+ 
+ enemy.x = random(0,width); 
+ enemy.y = height ; 
+ 
+ enemy.dirX =    0; 
+ enemy.dirY =  -1 * enemySpeed;   
+
+ enemy.isDiver = random(0,3) < 1; 
+
+ //til sidst returnere vi vores fjende objekt
+ return enemy;   
+};
+
+
+
+var releasedFork = false;
+
+//vi styrer vores mouseIsPressed fra disse to funktioner.
+mousePressed = function() {
+  mouseIsPressed = true;
+
+//hvis gafflen IKKE er ude at flyve - så kan vi påbegynde et nyt path
+if(!releasedFork){
+
+forkPath = [];
+
+}
+
+}
+
+
+
+mouseOut = function() {
+
+  mouseReleased();
+
+}
+
+ mouseReleased = function() {
+  mouseIsPressed = false;
+
+
+  if(releasedFork){
+    return;
+  }
+
+  //vi start vores gaffel ved den originale start.
+  //vi putter to ekstra paths ind i vores musepath: fra neptuns hånd til forkPath start og fra forkPaths slutning tilbage til Neptuns hånd
+
+
+  fork = {
+    x : (width / 2) - 50,
+    y : 100 
+   };
+
+  var firstPoint = forkPath[0];
+
+  //dette udregner distance mellem to punkter på et koordinatsystem
+  var distance = Math.sqrt( (fork.x-firstPoint.x)*(fork.x-firstPoint.x) + (fork.y-firstPoint.y)*(fork.y-firstPoint.y) );
+    
+  for(var i = 0; i < distance; i = i + forkSpeed){
+
+   var newX = lerp(firstPoint.x,fork.x,  i/distance);
+
+  var newY = lerp(firstPoint.y, fork.y,  i/distance);
+
+    forkPath.splice(0, 0, {x: newX, y: newY});
+
+  }
+  
+   var lastPoint = forkPath[forkPath.length -1];
+
+distance = Math.sqrt( (fork.x-lastPoint.x)*(fork.x-lastPoint.x) + (fork.y-lastPoint.y)*(fork.y-lastPoint.y) );
+    
+for(var i = 0; i < distance; i = i + forkSpeed){
+
+   var newX = lerp(lastPoint.x,fork.x,  i/distance);
+
+  var newY = lerp(lastPoint.y, fork.y,  i/distance);
+
+    forkPath.splice(forkPath.length , 0, {x: newX, y: newY});
+
+  }
+
+  releasedFork = true;
+
+}
+
+
+/*
+Det gøres  muligt at roterer fork-billedet.
+
+Vi udregner nedenunder vinklen mellem forks position og dens næste punkt (retning).
+Derefter laver vi et "tegnelag" ovenpå vores normale canvas. (en Matrix, laves med "pushMatrix()").
+
+Dette tegnelag kan flyttes og roteres, for derefter at smelte tilbage sammen med vores orginale lag (ved at bruge "popMatrix()").
+
+Ved at flytte og roterer et tegnelag som vi tegner vores fork-billede på, vises billedet rigtigt når vi smelter vores tegnelag tilbage i det normale billede (via popMatrix()).
+
+*/
+var drawFork = function(){
+
+  //kun hvis vores fork er ude at flyve roterer vi den. Ellers bliver den bare tegnet i neptuns hånd.
+  if(forkPath.length > 0 && releasedFork){
+
+  var point = forkPath[0];
+
+   //vinkel mellem position og retning
+  var angle = atan2(point.x - fork.x ,fork.y - point.y);
+      
+  pushMatrix();
+
+  translate(fork.x,fork.y);
+  
+  rotate(angle);
+  
+  image(forkImage ,0,0, forkPixelSize,forkPixelSize);
+    
+  popMatrix();
+
+
+  }else{
+
+    fork = {
+    x : (width / 2) - 50,
+    y : 80
+   };
+
+    image(forkImage ,fork.x,fork.y, forkPixelSize,forkPixelSize);
+ 
+  }
+
+
+
+}
+
+/*
+**TEGNE /DRAW FUNKTIONEN**
+
+Her køres vores game-loop. Denne funktion kører 30 gange i sekundet. 
+Alle de ting der hele tiden skal undersøges og ændre omkring vores mainCharacter, fjender og gaffel, sker her eller kaldes gennem funktioner her.
+
+*/
+
+var forkMoveTimestamp = millis();
+
+draw = function() {
+
+
+  //baggrund, hav og neptun tegnes.
+  background(255,243,243);
+    
+  fill(68, 76,174);
+  noStroke();
+
+  rect(0,100, width, height-100);
+
+  text("SCORE: " + score, 50,50 );
+	 
+	 //nu tegner vi vores hovedperson der hvor den nu befinder sig
+	 image(neptuneImage ,mainCharacter.x,mainCharacter.y, mainCharacterPixelSize,mainCharacterPixelSize);
+	 //Hvis man ikke kan loade billeder, kan ellipse bruges. (fjern // fra linjen nedenunder og sæt // ved "image" ovenover
+	 //ellipse(mainCharacter.x,mainCharacter.y, 20, 20);
+
+   drawFork();
+   
+
+
+   //hvis musen er trykket ned og vi ikke er ude at flyve, tilføjer vi punkter som vores gaffel skal flyve efter.
+   //for ikke at klumpe for meget sammen, sørger vi for vi kun tilføjer punkter hvis de er langt nok væk
+
+   var distance = 100000000;
+
+   if(forkPath.length > 0){
+
+    var lastPoint = forkPath[forkPath.length -1];
+
+    distance = Math.sqrt( (mouseX-lastPoint.x)*(mouseX-lastPoint.x) + (mouseY-lastPoint.y)*(mouseY-lastPoint.y) );
+ 
+   }
+   
+   //her tilføjes puntkerne
+   if(mouseIsPressed && !releasedFork && distance > 10){
+
+    forkPath.push({x: mouseX, y: mouseY, origin: true});
+
+   }
+
+   //her tegnes punkterne i forkpath - vi tegner KUN dem som man selv har trykket ned
+   fill(224, 207,62 );
+
+   for(var i = 0; i < forkPath.length; i++){
+
+    var point = forkPath[i];
+
+    if(point.origin != null)
+    ellipse(point.x, point.y, 5, 5);
+
+
+   }
+
+
+    //her "æder" vi den vej som gafflen kører af. Når den er slut, kan vi som spiller lave en ny.
+   if(releasedFork){
+
+   if(forkPath.length > 0 && millis() - forkTimestamp >= forkSpeed){
+
+    forkTimestamp = millis();
+
+
+  var point = forkPath[0];
+
+  fork.x = point.x;
+
+  fork.y = point.y;
+  
+  forkPath.splice(0,1);
+
+   }
+
+  
+    
+  }
+
+   if(forkPath.length == 0){
+
+    releasedFork = false;
+   }
+
+
+	//hver gang der er gået lidt tid, laver vi en ny fjende (1 sekund som default)
+    if(millis() - lastEnemyTimestamp >= enemySpawnTime){
+      lastEnemyTimestamp = millis() ;
+	  //dette skubber et nyt fjende objekt på vores fjende liste
+      enemies.push(Enemy());
+    }
+
+
+	 
+	 //for hver fjende, så tegner vi fjenden og renger ud om den er blevet ramt af en gafflen
+    for(var i = enemies.length-1; i >=0; i--){
+        
+	   //vi hiver hver fjende ud fra listen af fjender
+       var enemy = enemies[i];
+        
+		//og sætter dens nye position ligesom med hovedpersonen
+        enemy.x = enemy.x + enemy.dirX;
+        enemy.y = enemy.y + enemy.dirY;
+        
+		//hvis fjenden ryger ud fra banen, så sletter vi det.
+        if(enemy.x < 0 || enemy.x > width || enemy.y < 0 || enemy.y > height){
+         enemies.splice(i,1);   
+        }
+       
+		//dette er en formel, der udregner længden mellem to punkter (her fjenden og kuglen) 
+        var distance = Math.sqrt( (fork.x-enemy.x)*(fork.x-enemy.x) + (fork.y-enemy.y)*(fork.y-enemy.y) );
+		
+		//hvis distancen er for lav, så har skuddet ramt
+		//så vi sætter fjenden til lavere liv og fjerner skuddet
+		if(distance < enemySize ){
+        score += 1;
+      enemies.splice(i,1);
+
+        }
+		
+    //hver gang der er gået lidt tid, laver vi en ny fjende (1 sekund som default)
+    if(millis() - enemyAnimTiemstamp >= enemyAnimSpeed){
+     //tegn fjenden
+  enemyAnimIndex = (enemyAnimIndex + 1) % gobbelImages.length;
+
+         enemyAnimTiemstamp = millis();
+    }
+        
+        if(!enemy.isDiver)
+		image(gobbelImages[enemyAnimIndex],enemy.x,enemy.y, enemySize  ,enemySize  );
+      else
+      image(diverImages[enemyAnimIndex],enemy.x,enemy.y, diverSize  ,diverSize  );
+   
+
+      if(enemy.y < 100 ){
+         enemies = [];
+         score = 0;
+        }
+        
+    }
+    
+};
+		
+    }};
+
+    // Get the canvas that Processing-js will use
+    var canvas = document.getElementById("mycanvas"); 
+    // Pass the function sketchProc (defined in myCode.js) to Processing's constructor.
+    var processingInstance = new Processing(canvas, sketchProc); 
+ </script>
+
+</html>
